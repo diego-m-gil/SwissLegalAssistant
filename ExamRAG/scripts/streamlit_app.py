@@ -55,6 +55,14 @@ def format_citations(docs) -> str:
     """Extract and format unique citations from retrieved documents."""
     citations = set()
     
+    # Legal code abbreviation mapping for consistency
+    code_mapping = {
+        'OR': 'CO (Code of Obligations)',
+        'ZGB': 'CC (Civil Code)',
+        'URG': 'CopA (Copyright Act)',
+        'actual DSG': 'FADP (Federal Act on Data Protection)',
+    }
+    
     for doc in docs:
         metadata = doc.metadata
         source = metadata.get('source', 'Unknown')
@@ -63,8 +71,9 @@ def format_citations(docs) -> str:
         # Format citation based on source type
         if 'Handout' in source:
             citation = f"({source} p. {page})"
-        elif source in ['OR', 'ZGB', 'URG', 'actual DSG', 'Criminal Law (english)', 
-                       'Bundesgesetz über die Produktehaftpflicht']:
+        elif source in code_mapping:
+            citation = f"({code_mapping[source]})"
+        elif source in ['Criminal Law (english)', 'Bundesgesetz über die Produktehaftpflicht']:
             citation = f"({source})"
         else:
             citation = f"({source} p. {page})"
@@ -80,6 +89,10 @@ def answer_question(vectorstore: FAISS, question: str, k: int = 6):
     retriever = vectorstore.as_retriever(search_kwargs={"k": k})
     docs = retriever.get_relevant_documents(question)
     
+    # Check if we have any relevant documents at all
+    if len(docs) == 0:
+        return "No relevant information was found in the database for your query. Please try rephrasing your question or ask about a different topic covered in Swiss/EU legal materials.", [], {}
+    
     # Format context
     context = "\n\n".join([doc.page_content for doc in docs])
     
@@ -88,16 +101,19 @@ def answer_question(vectorstore: FAISS, question: str, k: int = 6):
 
 Your mission:
 1. Provide accurate, well-researched answers to legal questions about Swiss/EU privacy, IP, contract, liability, and technology law
-2. ALWAYS cite exact document + page or article number, e.g. (Handout #5 p. 12) or (OR Art. 101 II)
-3. NEVER hallucinate an article or page; rely only on retrieved context
+2. ALWAYS cite exact document + page or article number in parentheses immediately after each fact, e.g. (Handout #5 p. 12) or (OR Art. 101 II)
+3. NEVER hallucinate an article, law, or page reference; rely ONLY on retrieved context
+4. If the retrieved context doesn't contain sufficient information to answer the question fully, state clearly what information is missing
 
 Style requirements:
 - Answer in concise, clear language
-- Use bullet points when appropriate for readability
+- Use bullet points for listing key information
+- Format sources as separate bullet points at the end using the format:
+  • "Law/Document name: Article/Page reference - Brief description"
 - Include direct quotes only when essential
 - English only
 - No explanations about your process
-- If context insufficient: say "Insufficient context; please try rephrasing your question."
+- If the retrieved documents don't provide a clear answer, explicitly state: "The retrieved documents don't contain sufficient information about [specific topic]."
 
 Context from course materials:
 {context}
@@ -387,10 +403,16 @@ if submit_button and question.strip():
             st.markdown("### 📝 Research Results")
             st.markdown(answer)
             
-            # Display citations
+            # Display sources/references
             if citations:
-                st.markdown("### 📚 Sources")
-                st.info(citations)
+                st.markdown("### 📚 Sources & References")
+                
+                # Extract and format citations in a more readable way
+                citation_list = sorted(list(set([c.strip() for c in citations.replace("(", "").replace(")", "").split()])))
+                
+                # Format each citation as a bullet point
+                formatted_citations = "\n".join([f"• {citation}" for citation in citation_list])
+                st.markdown(formatted_citations)
             
             # Show token usage and cost
             with st.expander("📊 Token Usage & Cost"):
