@@ -50,8 +50,12 @@ st.markdown("""
     }
     /* Style legal citations in grey color */
     .citation {
-        color: #666666;
+        color: #777777;
         font-size: 0.9em;
+        font-weight: normal;
+        background-color: #f2f2f2;
+        padding: 1px 3px;
+        border-radius: 3px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -59,8 +63,8 @@ st.markdown("""
 # ---------- Helper Functions ----------
 def format_citations(docs) -> list:
     """Extract and format unique citations from retrieved documents.
-    Returns a list of formatted citations."""
-    citations = set()
+    Returns a structured list of citation information."""
+    citation_dict = {}
     
     # Legal code abbreviation mapping for consistency
     code_mapping = {
@@ -70,24 +74,55 @@ def format_citations(docs) -> list:
         'actual DSG': 'FADP (Federal Act on Data Protection)',
     }
     
+    # Map source types
+    source_types = {
+        'OR': 'Legal Code',
+        'ZGB': 'Legal Code',
+        'URG': 'Legal Code',
+        'actual DSG': 'Legal Code',
+        'Criminal Law (english)': 'Reference Material',
+        'Bundesgesetz über die Produktehaftpflicht': 'Legal Code',
+    }
+    
     for doc in docs:
         metadata = doc.metadata
         source = metadata.get('source', 'Unknown')
         page = metadata.get('page', '?')
         
-        # Format citation based on source type
-        if 'Handout' in source:
-            citation = f"{source}, page {page}"
-        elif source in code_mapping:
-            citation = f"{code_mapping[source]}"
-        elif source in ['Criminal Law (english)', 'Bundesgesetz über die Produktehaftpflicht']:
-            citation = f"{source}"
-        else:
-            citation = f"{source}, page {page}"
+        # Get a brief content snippet for context (first 100 chars)
+        snippet = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
         
-        citations.add(citation)
+        # Determine source category
+        if 'Handout' in source:
+            category = "Course Material"
+            display_name = f"{source}"
+            detail = f"Page {page}"
+        elif source in code_mapping:
+            category = "Legal Code"
+            display_name = code_mapping[source]
+            detail = ""
+        elif source in source_types:
+            category = source_types[source]
+            display_name = source
+            detail = ""
+        else:
+            category = "Other Reference"
+            display_name = source
+            detail = f"Page {page}" if page != "?" else ""
+        
+        # Create or update category in the dictionary
+        if category not in citation_dict:
+            citation_dict[category] = []
+            
+        # Add citation to the appropriate category
+        citation_dict[category].append({
+            "display_name": display_name,
+            "detail": detail,
+            "snippet": snippet,
+            "page": page
+        })
     
-    return sorted(list(citations))
+    return citation_dict
 
 def answer_question(vectorstore: FAISS, question: str, k: int = 6):
     """Answer a question using simple retrieval + LLM."""
@@ -109,15 +144,14 @@ def answer_question(vectorstore: FAISS, question: str, k: int = 6):
 
 Your mission:
 1. Provide accurate, well-researched answers to legal questions about Swiss/EU privacy, IP, contract, liability, and technology law
-2. ALWAYS cite exact document + page or article number in parentheses immediately after each fact, using this format: "<span class='citation'>(Handout #5 p. 12)</span>" or "<span class='citation'>(OR Art. 101 II)</span>"
+2. ALWAYS cite exact document + page or article number in parentheses immediately after each relevant fact or statement, using this HTML format: "<span class='citation'>(Handout #5 p. 12)</span>" or "<span class='citation'>(OR Art. 101 II)</span>"
 3. NEVER hallucinate an article, law, or page reference; rely ONLY on retrieved context
 4. If the retrieved context doesn't contain sufficient information to answer the question fully, state clearly what information is missing
 
 Style requirements:
 - Answer in concise, clear language
 - Use bullet points for listing key information
-- Format sources as separate bullet points at the end using the format:
-  • "Law/Document name: Article/Page reference - Brief description"
+- Citations should be placed directly after the relevant statement, not grouped at the end
 - Include direct quotes only when essential
 - English only
 - No explanations about your process
@@ -464,6 +498,7 @@ Answer:"""
                         "question": question.strip(),
                         "answer": answer,
                         "citations": [],
+                        "citation_dict": {},  # Empty dict for structured format
                         "docs": [],
                         "token_info": token_info
                     })
@@ -479,11 +514,22 @@ Answer:"""
             
             # Save to history
             timestamp = datetime.now().strftime("%H:%M:%S")
+            
+            # For history, convert citation dict to a flat list for backwards compatibility
+            flat_citations = []
+            for category, sources in citations.items():
+                for source in sources:
+                    if source["detail"]:
+                        flat_citations.append(f"{source['display_name']} - {source['detail']}")
+                    else:
+                        flat_citations.append(f"{source['display_name']}")
+            
             st.session_state.history.append({
                 "timestamp": timestamp,
                 "question": question.strip(),
                 "answer": answer,
-                "citations": citations,
+                "citations": flat_citations,
+                "citation_dict": citations,  # Keep the structured format too
                 "docs": docs,
                 "token_info": token_info
             })
@@ -496,9 +542,22 @@ Answer:"""
             if citations:
                 st.markdown("### 📚 Sources & References")
                 
-                # Display each citation as a bullet point in a nice format
-                for citation in citations:
-                    st.markdown(f"* {citation}")
+                # Display citations organized by category with tabs
+                if len(citations) > 0:
+                    # Create a tab for each category of sources
+                    tab_titles = list(citations.keys())
+                    tabs = st.tabs(tab_titles)
+                    
+                    for i, category in enumerate(citations.keys()):
+                        with tabs[i]:
+                            for source in citations[category]:
+                                if source["detail"]:
+                                    st.markdown(f"**{source['display_name']}** - {source['detail']}")
+                                else:
+                                    st.markdown(f"**{source['display_name']}**")
+                                
+                                with st.expander("Show context snippet"):
+                                    st.text(source["snippet"])
             
             # Show token usage and cost
             with st.expander("📊 Token Usage & Cost"):
@@ -545,7 +604,29 @@ if st.session_state.history:
         with st.expander(f"{item['timestamp']} - {item['question'][:50]}..."):
             st.markdown(f"**Research Query: {item['question']}**")
             st.markdown(item['answer'], unsafe_allow_html=True)
-            if item['citations']:
+            if item.get('citation_dict'):
+                st.markdown("**Sources & References:**")
+                # Use the structured format if available
+                citation_dict = item['citation_dict']
+                
+                # Create a tab for each category of sources
+                tab_titles = list(citation_dict.keys())
+                if tab_titles:  # Make sure there are categories
+                    tabs = st.tabs(tab_titles)
+                    
+                    for i, category in enumerate(citation_dict.keys()):
+                        with tabs[i]:
+                            for source in citation_dict[category]:
+                                if source.get("detail"):
+                                    st.markdown(f"**{source['display_name']}** - {source['detail']}")
+                                else:
+                                    st.markdown(f"**{source['display_name']}**")
+                                
+                                if source.get("snippet"):
+                                    with st.expander("Show context snippet"):
+                                        st.text(source["snippet"])
+            elif item['citations']:
+                # Fallback for older history entries
                 st.markdown("**Sources & References:**")
                 for citation in item['citations']:
                     st.markdown(f"* {citation}")
