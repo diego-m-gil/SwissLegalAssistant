@@ -3,6 +3,8 @@
 A retrieval-augmented generation system for Swiss and EU legal research using OpenAI embeddings and FAISS vector search. This tool helps legal professionals, students, and researchers efficiently find relevant information across legal codes, case law, and academic materials.
 
 > **Important**: This system requires you to add your own PDF files to the `pdf/` directory. The repository does not include any copyrighted legal materials or course content.
+> 
+![image](https://github.com/user-attachments/assets/cf3ab1be-b206-4130-92f3-3f9158ddcc06)
 
 ![image](https://github.com/user-attachments/assets/5cb9e143-f8cd-4046-96e2-6ab39093f410)
 
