@@ -31,3 +31,10 @@ ENV/
 
 # ExamRAG folder (legacy)
 ExamRAG/
+
+# User content (potentially copyrighted)
+pdf/
+text/
+chunks/
+index/
+!.gitkeep
