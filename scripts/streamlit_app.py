@@ -48,6 +48,11 @@ st.markdown("""
         padding-top: 1rem !important;
         padding-bottom: 1rem !important;
     }
+    /* Style legal citations in grey color */
+    .citation {
+        color: #666666;
+        font-size: 0.9em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,7 +109,7 @@ def answer_question(vectorstore: FAISS, question: str, k: int = 6):
 
 Your mission:
 1. Provide accurate, well-researched answers to legal questions about Swiss/EU privacy, IP, contract, liability, and technology law
-2. ALWAYS cite exact document + page or article number in parentheses immediately after each fact, e.g. (Handout #5 p. 12) or (OR Art. 101 II)
+2. ALWAYS cite exact document + page or article number in parentheses immediately after each fact, using this format: "<span class='citation'>(Handout #5 p. 12)</span>" or "<span class='citation'>(OR Art. 101 II)</span>"
 3. NEVER hallucinate an article, law, or page reference; rely ONLY on retrieved context
 4. If the retrieved context doesn't contain sufficient information to answer the question fully, state clearly what information is missing
 
@@ -144,7 +149,7 @@ Answer:"""
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
-        max_tokens=300
+        max_tokens=1000  # Increased to allow for longer, more complete answers
     )
     
     # Get approximate token count for input (rough estimation)
@@ -415,7 +420,7 @@ Answer:"""
 
                     # Use the LLM without retrieval
                     model_name = st.session_state.get('model_option', "gpt-4o")
-                    llm = ChatOpenAI(model_name=model_name, temperature=0.2)
+                    llm = ChatOpenAI(model_name=model_name, temperature=0.2, max_tokens=1000)
                     
                     # Get token counts for prompt
                     encoding = tiktoken.encoding_for_model(model_name)
@@ -485,7 +490,7 @@ Answer:"""
             
             # Display answer
             st.markdown("### 📝 Research Results")
-            st.markdown(answer)
+            st.markdown(answer, unsafe_allow_html=True)
             
             # Display sources/references
             if citations:
@@ -539,7 +544,7 @@ if st.session_state.history:
     for i, item in enumerate(reversed(st.session_state.history[-5:])):  # Show last 5 questions
         with st.expander(f"{item['timestamp']} - {item['question'][:50]}..."):
             st.markdown(f"**Research Query: {item['question']}**")
-            st.markdown(item['answer'])
+            st.markdown(item['answer'], unsafe_allow_html=True)
             if item['citations']:
                 st.markdown("**Sources & References:**")
                 for citation in item['citations']:
