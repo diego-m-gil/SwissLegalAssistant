@@ -4,6 +4,9 @@ A retrieval-augmented generation system for Swiss and EU legal research using Op
 
 > **Important**: This system requires you to add your own PDF files to the `pdf/` directory. The repository does not include any copyrighted legal materials or course content.
 
+![image](https://github.com/user-attachments/assets/5cb9e143-f8cd-4046-96e2-6ab39093f410)
+
+
 ## 🚀 Quick Start
 
 ### Option 1: Easy Setup & GUI
